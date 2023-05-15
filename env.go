@@ -14,13 +14,31 @@ type (
 	}
 )
 
-func MakeEnvSet(fn LookupFunc) EnvSet {
-	if fn == nil {
-		fn = os.LookupEnv
+func MakeEnvSet(funcs ...LookupFunc) EnvSet {
+	lookupFuncs := make([]LookupFunc, 0, len(funcs))
+	for _, fn := range funcs {
+		if fn == nil {
+			continue
+		}
+		lookupFuncs = append(lookupFuncs, fn)
 	}
+
+	lookup := os.LookupEnv
+	if len(lookupFuncs) > 0 {
+		lookup = func(key string) (value string, ok bool) {
+			for _, fn := range lookupFuncs {
+				value, ok = fn(key)
+				if ok {
+					return
+				}
+			}
+			return
+		}
+	}
+
 	return EnvSet{
 		flags:  make(map[string]flag),
-		lookup: fn,
+		lookup: lookup,
 	}
 }
 
