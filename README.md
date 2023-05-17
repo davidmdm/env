@@ -6,6 +6,7 @@
 
 - [Installation](#installation)
 - [Usage](#usage)
+- [Example](#example)
 - [API Reference](#api-reference)
 
 ## Installation
@@ -42,6 +43,26 @@ To parse the environment variables and set the corresponding flags, call the `Pa
 err := envset.Parse()
 if err != nil {
     // Handle error
+}
+```
+
+## Example
+
+```go
+import "github.com/davidmdm/env"
+
+type Config struct {
+    DatabaseURL string
+    Timeout     time.Duration
+}
+
+func ParseConfig() (*Config, error) {
+    var cfg Config
+
+    env.Var(&cfg.DatabaseURL, "DATABASE_URL", env.Option[string]{Required: true})
+    env.Var(&cfg.Timeout, "TIMEOUT", env.Option[time.Duration]{DefaultValue: 5 * time.Minute})
+
+    return &cfg, env.Parse()
 }
 ```
 
