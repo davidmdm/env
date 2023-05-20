@@ -1,7 +1,10 @@
 package env_test
 
 import (
+	"encoding"
+	"encoding/base64"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,4 +68,46 @@ func TestVar(t *testing.T) {
 	require.Equal(t, []string{"hello", "world"}, cfg.stringslice)
 	require.Equal(t, 5*time.Minute, cfg.duration)
 	require.EqualValues(t, []any{1.0, 2.0, 3.0}, cfg.custom.Value)
+}
+
+type CapText string
+
+var _ encoding.TextUnmarshaler = new(CapText)
+
+func (text *CapText) UnmarshalText(data []byte) error {
+	*text = CapText(strings.ToUpper(string(data)))
+	return nil
+}
+
+func TestTextUnmarshaler(t *testing.T) {
+	var text CapText
+
+	environment := env.MakeEnvSet(func(s string) (string, bool) { return "value", true })
+	env.FlagVar(environment, &text, "VAR")
+
+	require.NoError(t, environment.Parse())
+	require.Equal(t, "VALUE", string(text))
+}
+
+type Base64Text string
+
+var _ encoding.BinaryUnmarshaler = new(Base64Text)
+
+func (text *Base64Text) UnmarshalBinary(data []byte) error {
+	result, err := base64.RawStdEncoding.DecodeString(string(data))
+	if err != nil {
+		return err
+	}
+	*text = Base64Text(result)
+	return nil
+}
+
+func TestBinaryUnmarshaler(t *testing.T) {
+	var text Base64Text
+
+	environment := env.MakeEnvSet(func(s string) (string, bool) { return "aGVsbG8gd29ybGQK", true })
+	env.FlagVar(environment, &text, "VAR")
+
+	require.NoError(t, environment.Parse())
+	require.Equal(t, "hello world\n", string(text))
 }
