@@ -4,28 +4,65 @@
 
 ## Table of Contents
 
-- [Installation](#installation)
+- [Why](#why)
 - [Usage](#usage)
 - [Example](#example)
-- [API Reference](#api-reference)
 
-## Installation
+## Why
 
-To use this library in your Go project, you need to have Go installed and set up on your machine. Once you have Go installed, you can install the library by running the following command:
+Why another package for parsing the environment? Currently, most popular environment parsing libraries depend on struct tags to map the environment to a structure and provide options like flag requirement or default values when absent.
 
-```shell
-go get github.com/davidmdm/env
+With `env` and the use of Go Generics, we can now have a type-safe API that doesn't depend on struct tags and can take advantage of strong typing.
+
+Let's contrast `davidmdm/env` with `github.com/kelseyhightower/envconfig`:
+
+The envconfig approach is convenient but very sensitive to typos, and the defaults need to be encoded in their string format, which can be error-prone.
+
+```go
+package main
+
+import (
+    "time"
+    "github.com/kelseyhightower/envconfig"
+)
+
+type Config struct {
+    DatabaseURL string        `envconfig:"DATABASE_URL" required:"true"`
+    Timeout     time.Duration `envconfig:"TIMEMOUT" default:"5m"`
+}
+
+func main() {
+    var cfg Config
+    envconfig.Process("", &cfg)
+}
+```
+
+On the other hand, `davidmdm/env` does not suffer from these problems. It also has the added benefit of being programmatic instead of static. If we need, environment variable names and options could be determined at runtime instead of statically typed into a struct definition.
+
+```go
+package main
+
+import (
+    "time"
+    "github.com/davidmdm/env"
+)
+
+type Config struct {
+    DatabaseURL string
+    Timeout     time.Duration
+}
+
+func main() {
+    var cfg Config
+    env.Var(&cfg.DatabaseURL, "DATABASE_URL", env.Options[string]{Required: true})
+    env.Var(&cfg.Timeout, "TIMEOUT", env.Options[time.Duration]{Default: 5 * time.Minute})
+    env.Parse()
+}
 ```
 
 ## Usage
 
 The library provides a convenient way to parse environment variables and set corresponding flags in your Go application.
-
-To get started, import the library in your Go code:
-
-```go
-import "github.com/davidmdm/env"
-```
 
 ### Creating an EnvSet
 
@@ -33,6 +70,56 @@ The `EnvSet` struct is used to define a set of environment variables and their c
 
 ```go
 envset := env.MakeEnvSet()
+```
+
+By default, an envset will use `os.Lookup` to find environment variables. However, when instantiating, you can pass a variadic number of lookup funcs that will be used one after the other while searching for the flag variable. This can be useful for testing or when you want your data to come from other sources like `hashicorp/vault`, `AWS Secret Manager`, or anything you desire.
+
+```go
+envset := env.MakeEnvSet(func(envvar string) (string, bool) {
+  // lookup from some source.
+})
+```
+
+### Setting Flags on an EnvSet
+
+```go
+envset := env.MakeEnvSet()
+
+var max int
+env.FlagVar(envset, &max, "MAX")
+```
+
+### Custom Decoding
+
+`env` will use reflection to figure out how to parse the environment string into the target variable, and this works well for common types. However, if a type implements `encoding.TextUnmarshaler` or `encoding.BinaryUnmarshaler`, then those methods will be used.
+
+Example taken from the tests:
+
+```go
+type Base64Text string
+
+var _ encoding.BinaryUnmarshaler = new(Base64Text)
+
+func (text *Base64Text) UnmarshalBinary(data []byte) error {
+	result, err := base64.Raw
+
+StdEncoding.DecodeString(string(data))
+	if err != nil {
+		return err
+	}
+	*text = Base64Text(result)
+	return nil
+}
+
+func TestBinaryUnmarshaler(t *testing.T) {
+	var text Base64Text
+
+	environment := env.MakeEnvSet(func(s string) (string, bool) { return "aGVsbG8gd29ybGQK", true })
+	env.FlagVar(environment, &text, "VAR")
+
+	require.NoError(t, environment.Parse())
+	require.Equal(t, "hello world\n", string(text))
+}
 ```
 
 ### Parsing Environment Variables
@@ -45,6 +132,13 @@ if err != nil {
     // Handle error
 }
 ```
+
+### Convenience Variables and Functions
+
+- `env.Environment`: The default envset exposed by the package, which looks up envvars using `os.Lookup`
+- `env.Var()`: Convenience function to set flags on the default environment, equivalent to: `env.FlagVar(env.Environment, ...)`
+- `env.Parse()`: Convenience function to parse the default Environment envset.
+- `env.MustParse()`: Same as `env.Parse`, but panics if an error is encountered
 
 ## Example
 
@@ -59,72 +153,9 @@ type Config struct {
 func ParseConfig() (*Config, error) {
     var cfg Config
 
-    env.Var(&cfg.DatabaseURL, "DATABASE_URL", env.Option[string]{Required: true})
-    env.Var(&cfg.Timeout, "TIMEOUT", env.Option[time.Duration]{DefaultValue: 5 * time.Minute})
+    env.Var(&cfg.DatabaseURL, "DATABASE_URL", env.Options[string]{Required: true})
+    env.Var(&cfg.Timeout, "TIMEOUT", env.Options[time.Duration]{DefaultValue: 5 * time.Minute})
 
     return &cfg, env.Parse()
 }
 ```
-
-### Defining Flags with Options
-
-You can define flags for environment variables using the `FlagVar` function, which supports options to specify additional behavior. The `Options` struct allows you to define options such as whether the environment variable is required and a default value.
-
-Here's an example of defining a flag with options:
-
-```go
-var myFlag int
-env.FlagVar(envset, &myFlag, "MY_ENV_VAR", env.Options{
-    Required:     true,
-    DefaultValue: 42,
-})
-```
-
-### Convenience Functions
-
-The library also provides convenience functions to work with a default `EnvSet` named `Environment`. These functions allow you to define flags and parse the environment variables without explicitly passing an `EnvSet` object.
-
-#### Defining Flags with Options using `Var`
-
-To define a flag using the `Var` function with options, you can directly call it with the variable, environment variable name, and options:
-
-```go
-var myFlag int
-env.Var(&myFlag, "MY_ENV_VAR", env.Options{
-    Required:     true,
-    DefaultValue: 42,
-})
-```
-
-#### Parsing Environment Variables with `Parse`
-
-To parse the environment variables using the default `EnvSet`, call the `Parse` function:
-
-```go
-err := env.Parse()
-if err != nil {
-    // Handle error
-}
-```
-
-#### Parsing Environment Variables with `MustParse`
-
-The `MustParse` function is similar to `Parse` but panics if an error occurs during parsing:
-
-```go
-env.MustParse()
-```
-
-## API Reference
-
-### Types
-
-- `LookupFunc`: A function type that takes a string as input and returns a string and a boolean value indicating whether the lookup was successful or not.
-- `EnvSet`: A struct representing a set of environment variables and their corresponding flags.
-- `Options[T]`: A struct representing options for defining flags.
-
-### Functions
-
-- `MakeEnvSet(funcs ...LookupFunc) EnvSet`: Creates a new `EnvSet` with the specified lookup functions.
-- `FlagVar[T any](envset EnvSet, p *T, name string, opts ...Options[T])`: Defines a flag for an environment variable with options.
-- `Var[T any](p *T, name string, opts ...Options[T])`: Defines a flag using the default `EnvSet` with options
