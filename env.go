@@ -63,6 +63,13 @@ func (env EnvSet) Parse() error {
 	return errors.Join(errs...)
 }
 
+// MustParse is like Parse but panics if an error occurs
+func (env EnvSet) MustParse() {
+	if err := env.Parse(); err != nil {
+		panic(err)
+	}
+}
+
 func FlagVar[T any](envset EnvSet, p *T, name string, opts ...Options[T]) {
 	envset.flags[name] = flag{
 		value: genericValue[T]{p},
