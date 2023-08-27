@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 )
 
 type (
@@ -98,5 +99,40 @@ func Parse() error {
 func MustParse() {
 	if err := Parse(); err != nil {
 		panic(err)
+	}
+}
+
+func CommandLineArgs(args ...string) LookupFunc {
+	if len(args) == 0 {
+		args = os.Args[1:]
+	}
+
+	var (
+		m    = map[string][]string{}
+		flag = ""
+	)
+
+	for _, arg := range args {
+		switch {
+		case strings.HasPrefix(arg, "-"):
+			if flag != "" && len(m[flag]) == 0 {
+				m[flag] = []string{"true"}
+			}
+			flag = strings.ToLower(strings.TrimLeft(arg, "-"))
+			if key, value, ok := strings.Cut(flag, "="); ok {
+				m[key] = append(m[key], value)
+				flag = ""
+			}
+		case flag == "":
+			// skip positional args
+		default:
+			m[flag] = append(m[flag], arg)
+			flag = ""
+		}
+	}
+
+	return func(name string) (string, bool) {
+		value, ok := m[strings.ToLower(name)]
+		return strings.Join(value, ","), ok
 	}
 }
