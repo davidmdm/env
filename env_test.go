@@ -114,17 +114,19 @@ func TestBinaryUnmarshaler(t *testing.T) {
 
 func TestCommandLineArgsSource(t *testing.T) {
 	environment := env.MakeEnvSet(
-		env.CommandLineArgs("-force", "--filter=*.sql", "-count", "42", "-input", "a", "--input", "b"),
+		env.CommandLineArgs("--database-url", "db", "-force", "--filter=*.sql", "-count", "42", "-input", "a", "--input", "b"),
 	)
 
 	var (
-		force  bool
-		filter string
-		count  int
-		other  string
-		input  []string
+		databaseURL string
+		force       bool
+		filter      string
+		count       int
+		other       string
+		input       []string
 	)
 
+	env.FlagVar(environment, &databaseURL, "DATABASE_URL")
 	env.FlagVar(environment, &force, "FORCE")
 	env.FlagVar(environment, &filter, "FILTER")
 	env.FlagVar(environment, &count, "COUNT")
@@ -134,6 +136,7 @@ func TestCommandLineArgsSource(t *testing.T) {
 	require.NoError(t, environment.Parse())
 
 	require.True(t, force)
+	require.Equal(t, "db", databaseURL)
 	require.Equal(t, "*.sql", filter)
 	require.Equal(t, 42, count)
 	require.Equal(t, "", other)

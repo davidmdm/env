@@ -102,6 +102,10 @@ func MustParse() {
 	}
 }
 
+// CommandLineArgs returns a lookup function that will search the provided args for flags.
+// Since we often want our EnvironmentVariable name declarations to be reusable for command line args
+// the lookup is case-insensitive and all underscores are changes to dashes.
+// For example, a variable mapped to DATABASE_URL can be found using the --database-url flag when working with CommandLineArgs.
 func CommandLineArgs(args ...string) LookupFunc {
 	if len(args) == 0 {
 		args = os.Args[1:]
@@ -132,7 +136,8 @@ func CommandLineArgs(args ...string) LookupFunc {
 	}
 
 	return func(name string) (string, bool) {
-		value, ok := m[strings.ToLower(name)]
+		name = strings.ReplaceAll(strings.ToLower(name), "_", "-")
+		value, ok := m[name]
 		return strings.Join(value, ","), ok
 	}
 }
