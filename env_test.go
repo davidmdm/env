@@ -142,3 +142,29 @@ func TestCommandLineArgsSource(t *testing.T) {
 	require.Equal(t, "", other)
 	require.Equal(t, []string{"a", "b"}, input)
 }
+
+func TestMultipleLookups(t *testing.T) {
+	environment := env.MakeEnvSet(
+		env.CommandLineArgs("--max=42"),
+		func(name string) (string, bool) {
+			value, ok := map[string]string{
+				"MAX":  "10",
+				"NAME": "bob",
+			}[name]
+			return value, ok
+		},
+	)
+
+	var (
+		max  int
+		name string
+	)
+
+	env.FlagVar(environment, &max, "MAX")
+	env.FlagVar(environment, &name, "NAME")
+
+	require.NoError(t, environment.Parse())
+
+	require.Equal(t, 42, max)
+	require.Equal(t, "bob", name)
+}
