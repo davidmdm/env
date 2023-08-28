@@ -139,6 +139,7 @@ if err != nil {
 - `env.Var()`: Convenience function to set flags on the default environment, equivalent to: `env.FlagVar(env.Environment, ...)`
 - `env.Parse()`: Convenience function to parse the default Environment envset.
 - `env.MustParse()`: Same as `env.Parse`, but panics if an error is encountered
+- `env.CommandLineArgs()`: creates a lookup func for command line arguments.
 
 ## Example
 
@@ -158,4 +159,49 @@ func ParseConfig() (*Config, error) {
 
     return &cfg, env.Parse()
 }
+```
+
+## Commandline Argument Support
+
+Although `env` was created to work primarily with environment variables, it can look for variables from other sources by creating a custom envset and providing lookup functions. This library provides a rudimentary support for command line arguments.
+
+All you need to do is provide the CommandLineArgs lookup function. However since all capital and underscored names are not as popular on the command line, the environment variable names are transformed during lookup to be lowercase and to use dashes instead of underscores.
+
+Let's look at an example. The following program prioritizes command line args but falls back to using os.LookupEnv.
+
+```go
+import (
+    "fmt"
+    "github.com/davidmdm/env"
+)
+
+
+func main() {
+    var cfg struct {
+        AppName string
+        Environment string
+    }
+
+    // You may pass your own args to env.CommandLineArgs but by default it will use os.Args[1:]
+	source := env.MakeEnvSet(env.CommandLineArgs(), os.LookupEnv)
+
+    env.FlagVar(source, &cfg.AppName, "APP_NAME")
+    env.FlagVar(source, &cfg.Environment, "ENVIRONMENT")
+
+    source.MustParse()
+
+    fmt.Printf("%s (%s)\n", cfg.AppName, cfg.Environment)
+}
+```
+
+Let's try calling it!
+
+```bash
+./example --app-name Example --environment local
+Example (local)
+```
+
+```bash
+APP_NAME=example-v2 ENVIRONMENT=dev ./example --environment qa
+example-v2 (qa)
 ```
