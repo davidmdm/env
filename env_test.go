@@ -30,6 +30,7 @@ func TestVar(t *testing.T) {
 		string      string
 		stringslice []string
 		custom      Custom
+		mapint      map[string]int
 	}
 
 	environment := env.MakeEnvSet(func() env.LookupFunc {
@@ -42,6 +43,7 @@ func TestVar(t *testing.T) {
 			"s":      "hello",
 			"ss":     "hello,world",
 			"custom": `[1,2,3]`,
+			"mapint": `x=3,y=1`,
 		}
 		return func(s string) (string, bool) {
 			value, ok := e[s]
@@ -57,6 +59,7 @@ func TestVar(t *testing.T) {
 	env.FlagVar(environment, &cfg.duration, "d")
 	env.FlagVar(environment, &cfg.stringslice, "ss")
 	env.FlagVar(environment, &cfg.custom, "custom")
+	env.FlagVar(environment, &cfg.mapint, "mapint")
 
 	require.NoError(t, environment.Parse())
 
@@ -68,6 +71,32 @@ func TestVar(t *testing.T) {
 	require.Equal(t, []string{"hello", "world"}, cfg.stringslice)
 	require.Equal(t, 5*time.Minute, cfg.duration)
 	require.EqualValues(t, []any{1.0, 2.0, 3.0}, cfg.custom.Value)
+	require.EqualValues(t, map[string]int{"x": 3, "y": 1}, cfg.mapint)
+}
+
+func TestMapParsingErrors(t *testing.T) {
+	e1 := env.MakeEnvSet(func(name string) (string, bool) {
+		return "3=4", true
+	})
+
+	var boolint map[bool]int
+	env.FlagVar(e1, &boolint, "BOOLINT")
+
+	var intbool map[int]bool
+	env.FlagVar(e1, &intbool, "INTBOOL")
+
+	errText := e1.Parse().Error()
+	require.Contains(
+		t,
+		errText,
+		`failed to parse BOOLINT: failed to parse key: 3: strconv.ParseBool: parsing "3": invalid syntax`,
+	)
+
+	require.Contains(
+		t,
+		errText,
+		`failed to parse INTBOOL: failed to parse value at key: 3: strconv.ParseBool: parsing "4": invalid syntax`,
+	)
 }
 
 type CapText string

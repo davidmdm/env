@@ -104,6 +104,37 @@ func parse(v reflect.Value, text string, topLevel bool) error {
 		}
 
 		v.Set(slice)
+
+	case reflect.Map:
+		if !topLevel {
+			return fmt.Errorf("cannot support deep maps")
+		}
+
+		text = strings.TrimSpace(text)
+		if text == "" {
+			return nil
+		}
+
+		target := reflect.MakeMap(t)
+		for _, elem := range strings.Split(text, ",") {
+			key, value, ok := strings.Cut(elem, "=")
+			if !ok {
+				continue
+			}
+			k := reflect.New(t.Key()).Elem()
+			if err := parse(k, key, false); err != nil {
+				return fmt.Errorf("failed to parse key: %s: %w", key, err)
+			}
+
+			v := reflect.New(t.Elem()).Elem()
+			if err := parse(v, value, false); err != nil {
+				return fmt.Errorf("failed to parse value at key: %s: %w", key, err)
+			}
+
+			target.SetMapIndex(k, v)
+		}
+
+		v.Set(target)
 	}
 
 	return nil
