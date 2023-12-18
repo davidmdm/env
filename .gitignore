@@ -1,0 +1,6 @@
+.vscode
+.idea
+
+playground
+
+*.out

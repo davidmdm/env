@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -48,7 +49,7 @@ func (env EnvSet) Parse() error {
 	for name, flag := range env.flags {
 		envvar, ok := env.lookup(name)
 		if !ok && flag.opts.required {
-			errs = append(errs, fmt.Errorf("environment variable is required: %s", name))
+			errs = append(errs, fmt.Errorf("%q is required but not found", name))
 			continue
 		}
 		if !ok {
@@ -139,5 +140,30 @@ func CommandLineArgs(args ...string) LookupFunc {
 		name = strings.ReplaceAll(strings.ToLower(name), "_", "-")
 		value, ok := m[name]
 		return strings.Join(value, ","), ok
+	}
+}
+
+type FSLookupOpts struct {
+	Base string
+}
+
+func FileSystem(opts FSLookupOpts) LookupFunc {
+	if opts.Base == "" {
+		opts.Base = "."
+	}
+	return func(path string) (string, bool) {
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(opts.Base, path)
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				panic(err)
+			}
+			return "", false
+		}
+
+		return string(data), true
 	}
 }
