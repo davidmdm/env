@@ -27,21 +27,17 @@ func MakeEnvSet(funcs ...LookupFunc) EnvSet {
 
 	lookup := os.LookupEnv
 	if len(lookupFuncs) > 0 {
-		lookup = func(key string) (value string, ok bool) {
-			for _, fn := range lookupFuncs {
-				value, ok = fn(key)
-				if ok {
-					return
-				}
-			}
-			return
-		}
+		lookup = joinLookupFuncs(lookupFuncs...)
 	}
 
 	return EnvSet{
 		flags:  make(map[string]flag),
 		lookup: lookup,
 	}
+}
+
+func (env *EnvSet) SetLookupFunc(fns ...LookupFunc) {
+	env.lookup = joinLookupFuncs(fns...)
 }
 
 func (env EnvSet) Parse() error {
@@ -165,5 +161,17 @@ func FileSystem(opts FSLookupOpts) LookupFunc {
 		}
 
 		return string(data), true
+	}
+}
+
+func joinLookupFuncs(fns ...LookupFunc) LookupFunc {
+	return func(key string) (value string, ok bool) {
+		for _, fn := range fns {
+			value, ok = fn(key)
+			if ok {
+				return
+			}
+		}
+		return
 	}
 }
